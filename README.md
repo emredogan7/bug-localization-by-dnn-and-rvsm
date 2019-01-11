@@ -2,6 +2,8 @@
 
 - This study and implementation is adapted from the study [*Bug Localization with Combination of Deep Learning and Information Retrieval*](https://ieeexplore.ieee.org/document/7961519).
 
+- Bilkent University, CS550 Machine Learning Course Term Project.
+- Prepared by: *Emre Dogan & Hamdi Alperen Cetin*
 
 ## Dataset
 
