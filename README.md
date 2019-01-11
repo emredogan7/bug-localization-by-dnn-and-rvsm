@@ -6,7 +6,7 @@
 ## Dataset
 
 - For our implementation, the dataset of *Eclipse UI Platform* is used.
-	- The source code of the project can be found [here](https://github.com/logpai/bugrepo/tree/master/EclipsePlatform).
+	- The source code of the project can be found [here](https://github.com/eclipse/eclipse.platform.ui).
 	- The bug dataset can be accessed from [here](https://github.com/logpai/bugrepo/tree/master/EclipsePlatform).
 
 
