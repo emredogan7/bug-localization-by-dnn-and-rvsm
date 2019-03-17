@@ -1,4 +1,4 @@
-# Bug Localization from Bug Reports
+# Bug Localization by Using Bug Reports
 
 - This study and implementation is adapted from the study [*Bug Localization with Combination of Deep Learning and Information Retrieval*](https://ieeexplore.ieee.org/document/7961519).
 
