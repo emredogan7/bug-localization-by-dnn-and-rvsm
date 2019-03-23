@@ -1,5 +1,3 @@
-# %%
- 
 from util import csv2dict, tsv2dict
 import numpy as np
 from sklearn.neural_network import MLPRegressor

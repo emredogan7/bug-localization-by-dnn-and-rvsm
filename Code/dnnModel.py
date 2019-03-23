@@ -15,10 +15,10 @@ for i, sample in enumerate(samples_):
 
 np.random.shuffle(samples)
 
-x_ = np.zeros((len(samples),5))
-y_ = np.zeros((len(samples),1))
+x_ = np.zeros((len(samples), 5))
+y_ = np.zeros((len(samples), 1))
 
-for i,sample in enumerate(samples):
+for i, sample in enumerate(samples):
     x_[i][0] = float(sample['rVSM_similarity'])
     x_[i][1] = float(sample['collab_filter'])
     x_[i][2] = float(sample['classname_similarity'])
@@ -27,7 +27,8 @@ for i,sample in enumerate(samples):
     y_[i] = float(sample['match'])
 
 
-data_train, data_test, labels_train, labels_test = train_test_split(x_, y_, test_size=0.20, random_state=42)
+data_train, data_test, labels_train, labels_test = train_test_split(
+    x_, y_, test_size=0.20, random_state=42)
 
 X = data_train
 y = labels_train
@@ -41,7 +42,8 @@ for train_index, test_index in kf.split(X):
     X_train, X_test = X[train_index], X[test_index]
     y_train, y_test = y[train_index], y[test_index]
 
-    clf = MLPRegressor(solver='sgd', alpha=1e-5, hidden_layer_sizes=(300,), random_state=1, max_iter=10000, n_iter_no_change=30)
+    clf = MLPRegressor(solver='sgd', alpha=1e-5, hidden_layer_sizes=(300,),
+                       random_state=1, max_iter=10000, n_iter_no_change=30)
     clf.fit(X_train, y_train.ravel())
 
     predicted = clf.predict(X_test)
@@ -54,10 +56,10 @@ for train_index, test_index in kf.split(X):
     for sample in samples_:
         temp_dict = {}
         temp_dict[sample["file"]] = [float(sample['rVSM_similarity']),
-                                    float(sample['collab_filter']),
-                                    float(sample['classname_similarity']),
-                                    float(sample['bug_recency']),
-                                    float(sample['bug_frequency'])]
+                                     float(sample['collab_filter']),
+                                     float(sample['classname_similarity']),
+                                     float(sample['bug_recency']),
+                                     float(sample['bug_frequency'])]
 
         sample_dict[sample["report_id"]].append(temp_dict)
 
@@ -99,11 +101,11 @@ for train_index, test_index in kf.split(X):
         print("Accuracy of top", i+1, ":", acc)
 
 
-
 # Testing
 for hidden_node_count in range(100, 1001, 100):
-    print("Hidden node count", hidden_node_count )
-    clf = MLPRegressor(solver='sgd', alpha=1e-5, hidden_layer_sizes=(hidden_node_count,), random_state=1, max_iter=10000, n_iter_no_change=30)
+    print("Hidden node count", hidden_node_count)
+    clf = MLPRegressor(solver='sgd', alpha=1e-5, hidden_layer_sizes=(
+        hidden_node_count,), random_state=1, max_iter=10000, n_iter_no_change=30)
     clf.fit(X, y.ravel())
 
     # predicted = clf.predict(data_test)
@@ -116,10 +118,10 @@ for hidden_node_count in range(100, 1001, 100):
     for sample in samples_:
         temp_dict = {}
         temp_dict[sample["file"]] = [float(sample['rVSM_similarity']),
-                                    float(sample['collab_filter']),
-                                    float(sample['classname_similarity']),
-                                    float(sample['bug_recency']),
-                                    float(sample['bug_frequency'])]
+                                     float(sample['collab_filter']),
+                                     float(sample['classname_similarity']),
+                                     float(sample['bug_recency']),
+                                     float(sample['bug_frequency'])]
 
         sample_dict[sample["report_id"]].append(temp_dict)
 
