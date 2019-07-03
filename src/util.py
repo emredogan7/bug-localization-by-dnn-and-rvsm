@@ -22,7 +22,8 @@ def git_clone(repo_url="https://github.com/eclipse/eclipse.platform.ui.git", clo
         print("Already cloned")
         return
     cwd = os.getcwd()
-    os.mkdir(clone_path)
+    if not os.path.isdir(clone_path):
+        os.mkdir(clone_path)
     os.chdir(clone_path)
     os.system("git clone {}".format(repo_url))
     os.chdir(cwd)
