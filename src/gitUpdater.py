@@ -1,101 +1,87 @@
 from util import *
+import csv
 import os
 
 
-bug_reports = tsv2dict()[1199:]
-samples = csv2dict()
+git_clone()
 
-our_features_path = os.path.normpath('./data/our_features.csv')
-with open(our_features_path, 'w', newline='') as f:
+bug_reports = tsv2dict()
+# samples = csv2dict()
+
+features_path = os.path.normpath('../data/features.csv')
+with open(features_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(["report_id", "file", "rVSM_similarity", "collab_filter",
                      "classname_similarity", "bug_recency", "bug_frequency", "match"])
 
 for bug_report in bug_reports:
 
-    id = bug_report["id"]
+    report_id = bug_report["id"]
     bug_id = bug_report["bug_id"]
     summary = bug_report["summary"]
     description = bug_report["description"]
-    report_time = bug_report["report_time"]
+    report_date = bug_report["report_time"]
     report_timestamp = bug_report["report_timestamp"]
     status = bug_report["status"]
     commit = bug_report["commit"]
     commit_timestamp = bug_report["commit_timestamp"]
     files = bug_report["files"]
+    raw_corpus = bug_report["raw_text"]
 
-    rawCorpus = bug_report["rawCorpus"]
+    java_file_dict = get_all_source_code()
 
-    git_checkout(commit)
-    javaFiles = getAllCorpus()
+    collaborative_filter_score = None
+    bug_fixing_recency_ = None
+    bug_fixing_frequency_ = None
 
-    date = convert_to_datetime(report_time)
+    for buggy_file in files:
+        buggy_file = os.path.normpath(buggy_file)
 
-    collaborative_filter_score, bug_fixing_recency_, bug_fixing_frequency_ = None, None, None
-    for buggy_src_file in files:
-        buggy_src_file = os.path.normpath(buggy_src_file)
-        try:
-            src = javaFiles[buggy_src_file]
-        except:
+        if buggy_file not in java_file_dict.keys():
             continue
 
+        src = java_file_dict[buggy_file]
+
         # rVSM Text Similarity
-        rVSMTextSimilarity = cosine_sim(bug_report["rawCorpus"], src)
+        rvsm_text_sim = cosine_sim(raw_corpus, src)
 
         # Collaborative Filter Score
-        prevReports = get_previous_report_by_filename(
-            buggy_src_file, date, bug_reports)
-        relatedCorpus = []
-        for report in prevReports:
-            relatedCorpus.append(report["rawCorpus"])
-        relatedString = ' '.join(relatedCorpus)
+        prev_reports = previous_reports(
+            buggy_file, report_date, bug_reports)
+        prev_reports_combined_text = ""
+        for report in prev_reports:
+            prev_reports_combined_text += report["raw_text"]
+        
         collaborative_filter_score = cosine_sim(
-            bug_report["rawCorpus"], relatedString)
+            raw_corpus, prev_reports_combined_text)
 
         # Class Name Similarity
         raw_class_names = src.split(" class ")[1:]
 
-        classNames = []
+        class_names = []
         for block in raw_class_names:
-            classNames.append(block.split(' ')[0])
-        classCorpus = ' '.join(classNames)
-        classNameSimilarity = cosine_sim(bug_report["rawCorpus"], classCorpus)
+            class_names.append(block.split(' ')[0])
+        class_corpus = ' '.join(class_names)
+        class_name_sim = cosine_sim(raw_corpus, class_corpus)
 
         # Bug Fixing Recency
-        mrReport = get_most_recent_report(
-            buggy_src_file, convert_to_datetime(bug_report["report_time"]), bug_reports)
-        bug_fixing_recency_ = bug_fixing_recency(bug_report, mrReport)
+        most_recent_report = get_most_recent_report(
+            buggy_file, report_date, bug_reports)
+        bug_fixing_recency_ = bug_fixing_recency(
+            bug_report, most_recent_report)
 
         # Bug Fixing Frequency
         bug_fixing_frequency_ = bug_fixing_frequency(
-            buggy_src_file, date, bug_reports)
+            buggy_file, report_date, bug_reports)
 
-        our_features_path = os.path.normpath('./data/our_features.csv')
-        with open(our_features_path, 'a', newline='') as f:
+        features_path = os.path.normpath('../data/features.csv')
+        with open(features_path, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([id, buggy_src_file, rVSMTextSimilarity, collaborative_filter_score,
-                             classNameSimilarity, bug_fixing_recency_, bug_fixing_frequency_, 1])
+            writer.writerow([report_id, buggy_file, rvsm_text_sim, collaborative_filter_score,
+                             class_name_sim, bug_fixing_recency_, bug_fixing_frequency_, 1])
 
-    for src_file in get_top_k_wrong_files(files, rawCorpus, javaFiles):
-        with open(our_features_path, 'a', newline='') as f:
+    for src_file in get_top_k_wrong_files(files, raw_corpus, java_file_dict):
+        with open(features_path, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([id, src_file[0], src_file[1], collaborative_filter_score,
+            writer.writerow([report_id, src_file[0], src_file[1], collaborative_filter_score,
                              src_file[2], bug_fixing_recency_, bug_fixing_frequency_, 0])
-print()
-
-# for bug_report_id, commit_id, description_terms, buggy_src_files:
-#     pass
-
-# commit_id = -1
-# description_terms = []
-# buggy_src_files = []
-# for sample in samples:
-#     report_id = sample["report_id"]
-#     src_filename = sample["buggy_src_file"]
-#     commit_id, description_terms, buggy_src_files = bug_report_dict[report_id]
-#     git_checkout(commit_id)
-
-#     src_filename = os.path.normpath('./data/eclipse.platform.ui/' + src_filename)
-#     with open(src_filename) as f:
-#         src_text = f.read()
-#     print()
