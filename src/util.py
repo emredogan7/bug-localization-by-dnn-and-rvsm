@@ -1,3 +1,10 @@
+""" 
+Helper functions mostly for feature extraction.
+
+Used many modified and intact code blocks from 
+'https://github.com/jeffrey-palmerino/BugLocalizationDNN'
+"""
+
 import csv
 import re
 import os
@@ -11,7 +18,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 def git_clone(repo_url, clone_folder):
-    """ Clones the git repo from {repo_url} into clone_folder
+    """ Clones the git repo from 'repo_ur' into 'clone_folder'
 
     Arguments:
         repo_url {string} -- Url of git repository
@@ -50,11 +57,11 @@ def tsv2dict(tsv_path):
     return dict_list
 
 
-def csv2dict(csv_path='../data/features.csv'):
-    """Converts a comma separated values (csv) file into a dictionary
+def csv2dict(csv_path):
+    """ Converts a comma separated values (csv) file into a dictionary
 
-    Keyword Arguments:
-        csv_path {string} -- path to csv file (default: {'../data/features.csv'})
+    Arguments:
+        csv_path {string} -- path to csv file
     """
     with open(csv_path, 'r') as f:
         reader = csv.DictReader(f, delimiter=',')
@@ -77,49 +84,45 @@ def clean_and_split(text):
     return word_list
 
 
-def get_top_k_wrong_files(right_files, br_corpus, java_files, k=50):
-    """ Top k wrong files
+def top_k_wrong_files(right_files, br_raw_text, java_files, k=50):
+    """ Randomly samples 2*k from all wrong files and returns metrics
+        for top k files according to rvsm similarity.
 
     Arguments:
-        right_files {[type]} -- [description]
-        br_corpus {[type]} -- [description]
-        java_files {[type]} -- [description]
+        right_files {list} -- list of right files
+        br_raw_text {string} -- raw text of the bug report
+        java_files {dictionary} -- dictionary of source code files
 
     Keyword Arguments:
-        k {int} -- [description] (default: {50})
+        k {integer} -- the number of files to return metrics (default: {50})
     """
 
-    # Randomly sample 100 out of the 3,981 files so it will be quicker
-    randomly_sampled = random.sample(list(java_files), 100)
+    # Randomly sample 2*k files
+    randomly_sampled = random.sample(
+        set(java_files.keys()) - set(right_files), 2*k)
 
     all_files = []
-    for filename in [f for f in randomly_sampled if f not in right_files]:
+    for filename in randomly_sampled:
         try:
-            raw_class_names = java_files[filename].split(" class ")[1:]
+            src = java_files[filename]
 
-            class_names = []
-            for block in raw_class_names:
-                class_names.append(block.split(' ')[0])
-            class_corpus = ' '.join(class_names)
+            rvsm = cosine_sim(br_raw_text, src)
+            cns = class_name_similarity(br_raw_text, src)
 
-            one = cosine_sim(br_corpus, java_files[filename])
-            two = cosine_sim(br_corpus, class_corpus)
+            all_files.append((filename, rvsm, cns))
+        except:
+            pass
 
-            file_info = [filename, one, two]
-            all_files.append(file_info)
-        except Exception:
-            print("Error in wrong file parsing")
-            del java_files[filename]
+    top_k_files = sorted(all_files, key=lambda x: x[1], reverse=True)[:k]
 
-    topfifty = sorted(all_files, key=lambda x: x[1], reverse=True)[:k]
-    return topfifty
+    return top_k_files
 
 
 def stem_tokens(tokens):
     """ Remove stopword and stem
 
     Arguments:
-        tokens {token list} -- tokens to stem 
+        tokens {list} -- tokens to stem 
     """
     stemmer = PorterStemmer()
     removed_stopwords = [stemmer.stem(
@@ -157,11 +160,11 @@ def cosine_sim(text1, text2):
     return sim
 
 
-def get_all_source_code(start_dir="../data/eclipse.platform.ui/bundles/"):
+def get_all_source_code(start_dir):
     """ Creates corpus starting from 'start_dir'
 
-    Keyword Arguments:
-        start_dir {string} -- directory path to start (default: {"../data/eclipse.platform.ui/bundles/"})
+    Arguments:
+        start_dir {string} -- directory path to start
     """
     files = {}
     start_dir = os.path.normpath(start_dir)
@@ -178,7 +181,7 @@ def get_all_source_code(start_dir="../data/eclipse.platform.ui/bundles/"):
     return files
 
 
-def get_months_between(date1, date2):
+def get_months_between(d1, d2):
     """ Calculates the number of months between two date strings
 
     Arguments:
@@ -186,8 +189,8 @@ def get_months_between(date1, date2):
         d2 {datetime} -- date 2
     """
 
-    diff_in_months = abs((date1.year - date2.year) *
-                         12 + date1.month - date2.month)
+    diff_in_months = abs((d1.year - d2.year) * 12 + d1.month - d2.month)
+
     return diff_in_months
 
 
@@ -226,18 +229,18 @@ def bug_fixing_recency(br, prev_reports):
     """
     mrr = most_recent_report(prev_reports)
 
-    if br and mrr :
+    if br and mrr:
         return 1/float(get_months_between(br.get("report_time"), mrr.get("report_time")) + 1)
-    
+
     return 0
 
 
 def collaborative_filtering_score(raw_text, prev_reports):
     """[summary]
-    
+
     Arguments:
         raw_text {string} -- raw text of the bug report 
-        prev_reports {[type]} -- [description]
+        prev_reports {list} -- list of previous reports
     """
 
     prev_reports_merged_raw_text = ""
@@ -247,3 +250,19 @@ def collaborative_filtering_score(raw_text, prev_reports):
     cfs = cosine_sim(raw_text, prev_reports_merged_raw_text)
 
     return cfs
+
+
+def class_name_similarity(raw_text, source_code):
+    """[summary]
+
+    Arguments:
+        raw_text {string} -- raw text of the bug report 
+        source_code {string} -- java source code 
+    """
+    classes = source_code.split(" class ")[1:]
+    class_names = [c[:c.find(" ")] for c in classes]
+    class_names_text = ' '.join(class_names)
+
+    class_name_sim = cosine_sim(raw_text, class_names_text)
+
+    return class_name_sim

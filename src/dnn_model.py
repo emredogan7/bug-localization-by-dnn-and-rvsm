@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split, KFold
 
-samples_ = csv2dict()
+samples_ = csv2dict('../data/features.csv')
 samples = []
 
 # oversampling

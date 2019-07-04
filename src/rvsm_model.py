@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split, KFold
 
-samples = csv2dict()
+samples = csv2dict('../data/features.csv')
 
 rvsm_list = [float(sample['rVSM_similarity']) for sample in samples]
 
