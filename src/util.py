@@ -10,30 +10,30 @@ import string
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-def git_clone(repo_url="https://github.com/eclipse/eclipse.platform.ui.git", clone_path="../data/"):
-    """ Clones the git repo from repo_url
+def git_clone(repo_url, clone_folder):
+    """ Clones the git repo from {repo_url} into clone_folder
 
-    Keyword Arguments:
-        repo_url {str} -- [description] (default: {"https://github.com/eclipse/eclipse.platform.ui.git"})
-        clone_path {str} -- [description] (default: {"../data/"})
+    Arguments:
+        repo_url {string} -- Url of git repository
+        clone_folder {string} -- path of a local folder to clone the repository 
     """
     repo_name = repo_url[repo_url.rfind('/')+1:-4]
-    if os.path.isdir(clone_path + repo_name):
+    if os.path.isdir(clone_folder + repo_name):
         print("Already cloned")
         return
     cwd = os.getcwd()
-    if not os.path.isdir(clone_path):
-        os.mkdir(clone_path)
-    os.chdir(clone_path)
+    if not os.path.isdir(clone_folder):
+        os.mkdir(clone_folder)
+    os.chdir(clone_folder)
     os.system("git clone {}".format(repo_url))
     os.chdir(cwd)
 
 
-def tsv2dict(tsv_path='../data/Eclipse_Platform_UI.txt'):
-    """ Converts a tab separated file into a dict
+def tsv2dict(tsv_path):
+    """ Converts a tab separated values (tsv) file into a dictionary
 
-    Keyword Arguments:
-        tsv_path {string} -- path to tsv file (default: {'../data/Eclipse_Platform_UI.txt'})
+    Arguments:
+        tsv_path {string} -- path of the tsv file
     """
     reader = csv.DictReader(open(tsv_path, 'r'), delimiter='\t')
     dict_list = []
@@ -51,7 +51,7 @@ def tsv2dict(tsv_path='../data/Eclipse_Platform_UI.txt'):
 
 
 def csv2dict(csv_path='../data/features.csv'):
-    """Converts a comma separated file into a dict
+    """Converts a comma separated values (csv) file into a dictionary
 
     Keyword Arguments:
         csv_path {string} -- path to csv file (default: {'../data/features.csv'})
@@ -115,45 +115,6 @@ def get_top_k_wrong_files(right_files, br_corpus, java_files, k=50):
     return topfifty
 
 
-def calculate_scores(id, buggy_file, java_files, raw_corpus, date, bug_report, bug_reports, report_time, match):
-    buggy_file = os.path.normpath(buggy_file)
-    try:
-        src = java_files[buggy_file]
-    except:
-        return
-
-    rVSM_text_similarity = cosine_sim(raw_corpus, src)
-
-    prev_reports = get_previous_report_by_filename(
-        buggy_file, date, bug_reports)
-    related_corpus = []
-    for report in prev_reports:
-        related_corpus.append(report["raw_text"])
-    related_string = ' '.join(related_corpus)
-    collaborative_filter_score = cosine_sim(raw_corpus, related_string)
-
-    raw_class_names = src.split(" class ")[1:]
-
-    class_names = []
-    for block in raw_class_names:
-        class_names.append(block.split(' ')[0])
-    class_corpus = ' '.join(class_names)
-    classname_similarity = cosine_sim(bug_report["raw_text"], class_corpus)
-
-    mrReport = get_most_recent_report(
-        buggy_file, report_time, bug_reports)
-    bug_fixing_recency_ = bug_fixing_recency(bug_report, mrReport)
-
-    bug_fixing_frequency_ = bug_fixing_frequency(
-        buggy_file, date, bug_reports)
-
-    our_features_path = os.path.normpath('../data/our_features.csv')
-    with open(our_features_path, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([id, buggy_file, rVSM_text_similarity, collaborative_filter_score,
-                         classname_similarity, bug_fixing_recency_, bug_fixing_frequency_, match])
-
-
 def stem_tokens(tokens):
     """ Remove stopword and stem
 
@@ -177,6 +138,7 @@ def normalize(text):
     removed_punc = text.lower().translate(remove_punc_map)
     tokenized = word_tokenize(removed_punc)
     stemmed_tokens = stem_tokens(tokenized)
+
     return stemmed_tokens
 
 
@@ -191,6 +153,7 @@ def cosine_sim(text1, text2):
         tokenizer=normalize, min_df=1, stop_words='english')
     tfidf = vectorizer.fit_transform([text1, text2])
     sim = ((tfidf * tfidf.T).A)[0, 1]
+
     return sim
 
 
@@ -228,64 +191,59 @@ def get_months_between(date1, date2):
     return diff_in_months
 
 
-def get_most_recent_report(filename, current_date, dictionary):
+def most_recent_report(reports):
     """ Returns the most recently submitted previous report that shares a filename with the given bug report
 
     Arguments:
-        filename {string} -- [description]
-        current_date {datetime} -- [description]
-        dictionary {dictionary} -- [description]
+        filename {string} -- the name of the shared Java file
+        current_date {datetime} -- until date
+        bug_reports {list of dictionaries} -- list of all bug reports
     """
-    matching_reports = previous_reports(
-        filename, current_date, dictionary)
-    if len(matching_reports) > 0:
-        return max((br for br in matching_reports), key=lambda x: x.get("report_time"))
-    else:
-        return None
+
+    if len(reports) > 0:
+        return max(reports, key=lambda x: x.get("report_time"))
+
+    return None
 
 
-def previous_reports(filename, brdate, bug_reports):
+def previous_reports(filename, until, bug_reports):
     """ Returns a list of previously filed bug reports that share a file with the current bug report
 
     Arguments:
-        filename {string} -- shared source file name
-        brdate {datetime} -- until date
-        bug_reports {dictionary} -- bug report dictionary
+        filename {string} -- the name of the shared Java file
+        until {datetime} -- until date
+        bug_reports {list of dictionaries} -- list of all bug reports
     """
-    return [br for br in bug_reports if (filename in br["files"] and br["report_time"] < brdate)]
+    return [br for br in bug_reports if (filename in br["files"] and br["report_time"] < until)]
 
 
-def bug_fixing_recency(report1, report2):
+def bug_fixing_recency(br, prev_reports):
     """ Calculates the Bug Fixing Recency as defined by Lam et al.
 
     Arguments:
         report1 {dictionary} -- current bug report
         report2 {dictionary} -- most recent bug report
     """
-    if report1 is None or report2 is None:
-        return 0
-    else:
-        return 1/float(get_months_between(report1.get("report_time"), report2.get("report_time")) + 1)
+    mrr = most_recent_report(prev_reports)
+
+    if br and mrr :
+        return 1/float(get_months_between(br.get("report_time"), mrr.get("report_time")) + 1)
+    
+    return 0
 
 
-def bug_fixing_frequency(filename, date, dictionary):
-    """ Calculates the Bug Fixing Frequency as defined by Lam et al.
-
+def collaborative_filtering_score(raw_text, prev_reports):
+    """[summary]
+    
     Arguments:
-        filename {string} -- filename fixed by the bug report
-        date {datetime} -- date of current bug retport
-        dictionary {dictionary} -- dictionary of all bug reports
+        raw_text {string} -- raw text of the bug report 
+        prev_reports {[type]} -- [description]
     """
-    return len(previous_reports(filename, date, dictionary))
 
+    prev_reports_merged_raw_text = ""
+    for report in prev_reports:
+        prev_reports_merged_raw_text += report["raw_text"]
 
-def collaborative_filtering_score(report, filename, dictionary):
-    """ [summary]
+    cfs = cosine_sim(raw_text, prev_reports_merged_raw_text)
 
-    Arguments:
-        report {dictionary} -- The bug report we're calculating metadata for
-        filename {string} -- the filename we're checking previous bug reports for
-        dictionary {dictionary} -- [description]
-    """
-    matching_reports = previous_reports(
-        filename, report.get("report_time"), dictionary)
+    return cfs
