@@ -9,6 +9,7 @@ import csv
 import re
 import os
 import random
+import timeit
 from datetime import datetime
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
@@ -48,8 +49,8 @@ def tsv2dict(tsv_path):
         line["files"] = [os.path.normpath(f[8:]) for f in line["files"].strip(
         ).split() if f.startswith("bundles/") and f.endswith(".java")]
         line["raw_text"] = line["summary"] + line["description"]
-        line["summary"] = clean_and_split(line["summary"][11:])
-        line["description"] = clean_and_split(line["description"])
+        # line["summary"] = clean_and_split(line["summary"][11:])
+        # line["description"] = clean_and_split(line["description"])
         line["report_time"] = datetime.strptime(
             line["report_time"], "%Y-%m-%d %H:%M:%S")
 
@@ -266,3 +267,16 @@ def class_name_similarity(raw_text, source_code):
     class_name_sim = cosine_sim(raw_text, class_names_text)
 
     return class_name_sim
+
+
+class CodeTimer:
+    def __init__(self, message=""):
+        self.message = message
+
+    def __enter__(self):
+        print(self.message)
+        self.start = timeit.default_timer()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.took = timeit.default_timer() - self.start
+        print("Finished in {0:0.5f} secs.".format(self.took))

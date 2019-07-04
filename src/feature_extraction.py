@@ -9,73 +9,82 @@ from util import *
 import csv
 import os
 
-# Clone git repo to a local folder
-git_clone(repo_url="https://github.com/eclipse/eclipse.platform.ui.git",
-          clone_folder="../data/")
 
-# Read bug reports from tab separated file.
-bug_reports = tsv2dict('../data/Eclipse_Platform_UI.txt')
+def extract_features():
+    # Clone git repo to a local folder
+    git_clone(repo_url="https://github.com/eclipse/eclipse.platform.ui.git",
+              clone_folder="../data/")
 
-features_path = os.path.normpath('../data/features.csv')
-with open(features_path, 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(["report_id", "file", "rVSM_similarity", "collab_filter",
-                     "classname_similarity", "bug_recency", "bug_frequency", "match"])
+    # Read bug reports from tab separated file.
+    bug_reports = tsv2dict('../data/Eclipse_Platform_UI.txt')
 
+    features_path = os.path.normpath('../data/features.csv')
+    with open(features_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["report_id", "file", "rVSM_similarity", "collab_filter",
+                         "classname_similarity", "bug_recency", "bug_frequency", "match"])
 
-skipped_files_count = 0
-len_bug_reports = len(bug_reports)
-for i, br in enumerate(bug_reports):
+    skipped_files_count = 0
+    len_bug_reports = len(bug_reports)
 
-    print("Bug repport : {} / {}".format(i+1, len_bug_reports), end="\r")
+    for i, br in enumerate(bug_reports):
 
-    br_id = br["id"]
-    br_date = br["report_time"]
-    br_files = br["files"]
-    br_raw_text = br["raw_text"]
+        print("Bug report : {} / {}".format(i+1, len_bug_reports), end="\r")
 
-    java_src_dict = get_all_source_code("../data/eclipse.platform.ui/bundles/")
+        br_id = br["id"]
+        br_date = br["report_time"]
+        br_files = br["files"]
+        br_raw_text = br["raw_text"]
 
-    cfs = None
-    bfr = None
-    bff = None
+        java_src_dict = get_all_source_code(
+            "../data/eclipse.platform.ui/bundles/")
 
-    for java_file in br_files:
-        java_file = os.path.normpath(java_file)
+        cfs = None
+        bfr = None
+        bff = None
 
-        try:
-            # Source code of the java file
-            src = java_src_dict[java_file]
+        for java_file in br_files:
+            java_file = os.path.normpath(java_file)
 
-            # rVSM Text Similarity
-            rvsm = cosine_sim(br_raw_text, src)
+            try:
+                # Source code of the java file
+                src = java_src_dict[java_file]
 
-            # Class Name Similarity
-            cns = class_name_similarity(br_raw_text, src)
+                # rVSM Text Similarity
+                rvsm = cosine_sim(br_raw_text, src)
 
-            # Previous Reports
-            prev_reports = previous_reports(java_file, br_date, bug_reports)
+                # Class Name Similarity
+                cns = class_name_similarity(br_raw_text, src)
 
-            # Collaborative Filter Score
-            cfs = collaborative_filtering_score(br_raw_text, prev_reports)
+                # Previous Reports
+                prev_reports = previous_reports(
+                    java_file, br_date, bug_reports)
 
-            # Bug Fixing Recency
-            bfr = bug_fixing_recency(br, prev_reports)
+                # Collaborative Filter Score
+                cfs = collaborative_filtering_score(br_raw_text, prev_reports)
 
-            # Bug Fixing Frequency
-            bff = len(prev_reports)
+                # Bug Fixing Recency
+                bfr = bug_fixing_recency(br, prev_reports)
 
-            features_path = os.path.normpath('../data/features.csv')
+                # Bug Fixing Frequency
+                bff = len(prev_reports)
+
+                features_path = os.path.normpath('../data/features.csv')
+                with open(features_path, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(
+                        [br_id, java_file, rvsm, cfs, cns, bfr, bff, 1])
+            except:
+                skipped_files_count += 1
+
+        for java_file, rvsm, cns in top_k_wrong_files(br_files, br_raw_text, java_src_dict):
             with open(features_path, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(
-                    [br_id, java_file, rvsm, cfs, cns, bfr, bff, 1])
-        except:
-            skipped_files_count += 1
+                    [br_id, java_file, rvsm, cfs, cns, bfr, bff, 0])
 
-    for java_file, rvsm, cns in top_k_wrong_files(br_files, br_raw_text, java_src_dict):
-        with open(features_path, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([br_id, java_file, rvsm, cfs, cns, bfr, bff, 0])
+    print("\n{} files are skipped.".format(skipped_files_count))
 
-print("XXXXXXX", skipped_files_count)
+
+with CodeTimer("Feature extraction"):
+    extract_features()
