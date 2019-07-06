@@ -11,13 +11,14 @@ import csv
 import os
 
 
-def extract(i, br, bug_reports):
+def extract(i, br, bug_reports, java_src_dict):
     """Extracts 1 right and 50 wrong features for the given bug report
     
     Arguments:
         i {integer} -- Index for printing information
         br {dictionary} -- Given bug report 
         bug_reports {list of dictionaries} -- All bug reports
+        java_src_dict {dictionary} -- A dictionary of java source codes
     """
     print("Bug report : {} / {}".format(i + 1, len(bug_reports)), end="\r")
 
@@ -25,8 +26,6 @@ def extract(i, br, bug_reports):
     br_date = br["report_time"]
     br_files = br["files"]
     br_raw_text = br["raw_text"]
-
-    java_src_dict = get_all_source_code("../data/eclipse.platform.ui/bundles/")
 
     cfs = None
     bfr = None
@@ -80,9 +79,13 @@ def extract_features():
     # Read bug reports from tab separated file
     bug_reports = tsv2dict("../data/Eclipse_Platform_UI.txt")
 
+    # Read all java source files
+    java_src_dict = get_all_source_code("../data/eclipse.platform.ui/bundles/")
+
     # Use all CPUs except one to speed up extraction and avoid computer lagging
     batches = Parallel(n_jobs=cpu_count() - 1)(
-        delayed(extract)(i, br, bug_reports) for i, br in enumerate(bug_reports)
+        delayed(extract)(i, br, bug_reports, java_src_dict)
+        for i, br in enumerate(bug_reports)
     )
 
     # Flatten features
