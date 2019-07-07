@@ -72,7 +72,7 @@ for train_index, test_index in kf.split(X):
 
         sample_dict[sample["report_id"]].append(temp_dict)
 
-    bug_reports = tsv2dict()
+    bug_reports = tsv2dict("../data/Eclipse_Platform_UI.txt")
     bug_reports_files_dict = {}
 
     for bug_report in bug_reports:
@@ -142,7 +142,7 @@ for hidden_node_count in range(100, 1001, 100):
 
         sample_dict[sample["report_id"]].append(temp_dict)
 
-    bug_reports = tsv2dict()
+    bug_reports = tsv2dict("../data/Eclipse_Platform_UI.txt")
     bug_reports_files_dict = {}
 
     for bug_report in bug_reports:

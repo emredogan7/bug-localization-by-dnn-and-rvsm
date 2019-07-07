@@ -38,7 +38,7 @@ def git_clone(repo_url, clone_folder):
 
 
 def tsv2dict(tsv_path):
-    """ Converts a tab separated values (tsv) file into a dictionary
+    """ Converts a tab separated values (tsv) file into a list of dictionaries
 
     Arguments:
         tsv_path {string} -- path of the tsv file
