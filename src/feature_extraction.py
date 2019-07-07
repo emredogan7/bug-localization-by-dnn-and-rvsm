@@ -12,7 +12,8 @@ import os
 
 
 def extract(i, br, bug_reports, java_src_dict):
-    """Extracts 1 right and 50 wrong features for the given bug report
+    """ Extracts features for 50 wrong(randomly chosen) files for each
+        right(buggy) file for the given bug report.
     
     Arguments:
         i {integer} -- Index for printing information
@@ -27,9 +28,6 @@ def extract(i, br, bug_reports, java_src_dict):
     br_files = br["files"]
     br_raw_text = br["raw_text"]
 
-    cfs = None
-    bfr = None
-    bff = None
     features = []
 
     for java_file in br_files:
@@ -58,11 +56,14 @@ def extract(i, br, bug_reports, java_src_dict):
             bff = len(prev_reports)
 
             features.append([br_id, java_file, rvsm, cfs, cns, bfr, bff, 1])
+
+            for java_file, rvsm, cns in top_k_wrong_files(
+                br_files, br_raw_text, java_src_dict
+            ):
+                features.append([br_id, java_file, rvsm, cfs, cns, bfr, bff, 0])
+
         except:
             pass
-
-    for java_file, rvsm, cns in top_k_wrong_files(br_files, br_raw_text, java_src_dict):
-        features.append([br_id, java_file, rvsm, cfs, cns, bfr, bff, 0])
 
     return features
 
