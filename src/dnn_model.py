@@ -34,20 +34,23 @@ def features_and_labels(samples):
     return features, labels
 
 
-def some_collections(samples_):
+def some_collections(samples_, only_rvsm=False):
     sample_dict = {}
     for sample in samples_:
         sample_dict[sample["report_id"]] = []
 
     for sample in samples_:
         temp_dict = {}
-        temp_dict[os.path.normpath(sample["file"])] = [
-            float(sample["rVSM_similarity"]),
-            float(sample["collab_filter"]),
-            float(sample["classname_similarity"]),
-            float(sample["bug_recency"]),
-            float(sample["bug_frequency"]),
-        ]
+
+        values = [float(sample["rVSM_similarity"])]
+        if not only_rvsm:
+            values += [
+                float(sample["collab_filter"]),
+                float(sample["classname_similarity"]),
+                float(sample["bug_recency"]),
+                float(sample["bug_frequency"]),
+            ]
+        temp_dict[os.path.normpath(sample["file"])] = values
 
         sample_dict[sample["report_id"]].append(temp_dict)
 
@@ -55,16 +58,16 @@ def some_collections(samples_):
     bug_reports_files_dict = {}
 
     for bug_report in bug_reports:
-        bug_id = bug_report["id"]
-        bug_reports_files_dict[bug_id] = bug_report["files"]
+        bug_reports_files_dict[bug_report["id"]] = bug_report["files"]
 
     return sample_dict, bug_reports, bug_reports_files_dict
 
 
 def train_dnn(
     i,
-    features_train,
-    labels_train,
+    num_folds,
+    features,
+    labels,
     train_index,
     test_index,
     sample_dict,
@@ -72,8 +75,8 @@ def train_dnn(
     bug_reports_files_dict,
 ):
     print("Experiment: {} / {}".format(i + 1, num_folds), end="\r")
-    X_train, X_test = features_train[train_index], features_train[test_index]
-    y_train, y_test = labels_train[train_index], labels_train[test_index]
+    X_train, y_train = features[train_index], labels[train_index]
+    # X_test, y_test = features_train[test_index], labels_train[test_index]
 
     clf = MLPRegressor(
         solver="sgd",
@@ -89,7 +92,7 @@ def train_dnn(
 
     topk_counters = [0] * 20
     negative_total = 0
-    for bug_report in bug_reports:
+    for bug_report in bug_reports[train_index]:
         dnn_input = []
         corresponding_files = []
         bug_id = bug_report["id"]
@@ -117,38 +120,39 @@ def train_dnn(
     for i, counter in enumerate(topk_counters):
         acc = counter / (len(bug_reports) - negative_total)
         acc_dict[i + 1] = acc
-        # print("Accuracy of top", i + 1, ":", acc)
 
     return acc_dict
 
 
-samples_ = csv2dict("../data/features.csv")
+def dnn_model_kfold(k=10):
+    samples_ = csv2dict("../data/features.csv")
 
-sample_dict, bug_reports, bug_reports_files_dict = some_collections(samples_)
+    sample_dict, bug_reports, bug_reports_files_dict = some_collections(samples_)
 
-samples = oversample(samples_)
-np.random.shuffle(samples)
-features, labels = features_and_labels(samples)
-features_train, features_test, labels_train, labels_test = train_test_split(
-    features, labels, test_size=0.20, random_state=42
-)
+    samples = oversample(samples_)
+    np.random.shuffle(samples)
+    features, labels = features_and_labels(samples)
 
-# K-fold Cross Validation
-num_folds = 10
-kf = KFold(n_splits=num_folds)
+    # K-fold Cross Validation
+    kf = KFold(n_splits=k)
 
-acc_dicts = Parallel(n_jobs=cpu_count() - 1)(
-    delayed(train_dnn)(
-        i,
-        features_train,
-        labels_train,
-        train_index,
-        test_index,
-        sample_dict,
-        bug_reports,
-        bug_reports_files_dict,
+    acc_dicts = Parallel(n_jobs=cpu_count() - 1)(
+        delayed(train_dnn)(
+            i,
+            k,
+            features,
+            labels,
+            train_index,
+            test_index,
+            sample_dict,
+            bug_reports,
+            bug_reports_files_dict,
+        )
+        for i, (train_index, test_index) in enumerate(kf.split(features))
     )
-    for i, (train_index, test_index) in enumerate(kf.split(features_train))
-)
 
-print(acc_dicts)
+    avg_acc_dict = {}
+    for key in acc_dicts[0].keys():
+        avg_acc_dict[key] = round(sum([d[key] for d in acc_dicts]) / len(acc_dicts), 3)
+
+    return avg_acc_dict

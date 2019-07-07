@@ -2,26 +2,14 @@ from util import csv2dict, tsv2dict
 import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split, KFold
+from dnn_model import some_collections
+
 
 samples = csv2dict("../data/features.csv")
 
 rvsm_list = [float(sample["rVSM_similarity"]) for sample in samples]
 
-sample_dict = {}
-for sample in samples:
-    sample_dict[sample["report_id"]] = []
-
-for sample in samples:
-    temp_dict = {}
-    temp_dict[sample["file"]] = [float(sample["rVSM_similarity"])]
-
-    sample_dict[sample["report_id"]].append(temp_dict)
-
-bug_reports = tsv2dict()
-bug_reports_files_dict = {}
-
-for bug_report in bug_reports:
-    bug_reports_files_dict[bug_report["id"]] = bug_report["files"]
+sample_dict, bug_reports, bug_reports_files_dict = some_collections(samples, True)
 
 topk_counters = [0] * 20
 negative_total = 0
@@ -49,6 +37,9 @@ for bug_report in bug_reports:
                 topk_counters[i - 1] += 1
                 break
 
+acc_dict = {}
 for i, counter in enumerate(topk_counters):
     acc = counter / (len(bug_reports) - negative_total)
-    print("Accuracy of top", i + 1, ":", acc)
+    acc_dict[i + 1] = round(acc, 3)
+
+print(acc_dict)
