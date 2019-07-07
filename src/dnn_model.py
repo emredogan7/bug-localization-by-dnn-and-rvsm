@@ -3,6 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split, KFold
 from joblib import Parallel, delayed, cpu_count
 import numpy as np
+import os
 
 
 def oversample(samples_):
@@ -40,7 +41,7 @@ def some_collections(samples_):
 
     for sample in samples_:
         temp_dict = {}
-        temp_dict[sample["file"]] = [
+        temp_dict[os.path.normpath(sample["file"])] = [
             float(sample["rVSM_similarity"]),
             float(sample["collab_filter"]),
             float(sample["classname_similarity"]),
