@@ -3,9 +3,9 @@ import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split, KFold
 
-samples = csv2dict('../data/features.csv')
+samples = csv2dict("../data/features.csv")
 
-rvsm_list = [float(sample['rVSM_similarity']) for sample in samples]
+rvsm_list = [float(sample["rVSM_similarity"]) for sample in samples]
 
 sample_dict = {}
 for sample in samples:
@@ -13,7 +13,7 @@ for sample in samples:
 
 for sample in samples:
     temp_dict = {}
-    temp_dict[sample["file"]] = [float(sample['rVSM_similarity'])]
+    temp_dict[sample["file"]] = [float(sample["rVSM_similarity"])]
 
     sample_dict[sample["report_id"]].append(temp_dict)
 
@@ -50,5 +50,5 @@ for bug_report in bug_reports:
                 break
 
 for i, counter in enumerate(topk_counters):
-    acc = counter / (len(bug_reports)-negative_total)
-    print("Accuracy of top", i+1, ":", acc)
+    acc = counter / (len(bug_reports) - negative_total)
+    print("Accuracy of top", i + 1, ":", acc)
