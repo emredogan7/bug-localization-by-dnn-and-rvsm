@@ -279,8 +279,15 @@ def class_name_similarity(raw_text, source_code):
     return class_name_sim
 
 
-
 def helper_collections(samples, only_rvsm=False):
+    """ Generates helper function for calculations
+    
+    Arguments:
+        samples {list} -- samples from features.csv
+    
+    Keyword Arguments:
+        only_rvsm {bool} -- If True only 'rvsm' features are added to 'sample_dict'. (default: {False})
+    """
     sample_dict = {}
     for s in samples:
         sample_dict[s["report_id"]] = []
@@ -310,6 +317,16 @@ def helper_collections(samples, only_rvsm=False):
 
 
 def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
+    """ Calculates top-k accuracies
+    
+    Arguments:
+        test_bug_reports {list of dictionaries} -- list of all bug reports
+        sample_dict {dictionary of dictionaries} -- a helper collection for fast accuracy calculation
+        br2files_dict {dictionary} -- dictionary for "bug report id - list of all related files in features.csv" pairs
+    
+    Keyword Arguments:
+        clf {object} -- A classifier with 'predict()' function. If None, rvsm relevancy is used. (default: {None})
+    """
     topk_counters = [0] * 20
     negative_total = 0
     for bug_report in test_bug_reports:
@@ -351,8 +368,15 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
     return acc_dict
 
 
-
 class CodeTimer:
+    """ Keeps time from the initalization, and print the elapsed time at the end.
+
+        Example:
+
+        with CodeTimer("Message"):
+            foo()
+    """
+
     def __init__(self, message=""):
         self.message = message
 
