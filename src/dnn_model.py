@@ -92,7 +92,7 @@ def train_dnn(
 
     topk_counters = [0] * 20
     negative_total = 0
-    for bug_report in bug_reports[train_index]:
+    for bug_report in bug_reports:
         dnn_input = []
         corresponding_files = []
         bug_id = bug_report["id"]
