@@ -34,7 +34,7 @@ def features_and_labels(samples):
     return features, labels
 
 
-def some_collections(samples_, only_rvsm=False):
+def helper_collections(samples_, only_rvsm=False):
     sample_dict = {}
     for sample in samples_:
         sample_dict[sample["report_id"]] = []
@@ -63,6 +63,49 @@ def some_collections(samples_, only_rvsm=False):
     return sample_dict, bug_reports, bug_reports_files_dict
 
 
+def topk_accuarcy(bug_reports, sample_dict, bug_reports_files_dict, clf=None):
+
+    topk_counters = [0] * 20
+    negative_total = 0
+    for bug_report in bug_reports:
+        dnn_input = []
+        corresponding_files = []
+        bug_id = bug_report["id"]
+
+        try:
+            for temp_dict in sample_dict[bug_id]:
+                key = list(temp_dict.keys())[0]
+                value = list(temp_dict.values())[0]
+                dnn_input.append(value)
+                corresponding_files.append(key)
+        except:
+            negative_total += 1
+            continue
+
+        # Calculate relevancy for all files related to the bug report in features.csv
+        # Remeber that there are 50 wrong(randomly chosen) files for each right(buggy) in features.csv
+        relevancy_list = []
+        if clf:  # dnn classifier
+            relevancy_list = clf.predict(dnn_input)
+        else:  # rvsm
+            relevancy_list = np.array(dnn_input).ravel()
+
+        # Top-1, top-2 ... top-20 accuracy
+        for i in range(1, 21):
+            max_indices = np.argpartition(relevancy_list, -i)[-i:]
+            for corresponding_file in np.array(corresponding_files)[max_indices]:
+                if str(corresponding_file) in bug_reports_files_dict[bug_id]:
+                    topk_counters[i - 1] += 1
+                    break
+
+    acc_dict = {}
+    for i, counter in enumerate(topk_counters):
+        acc = counter / (len(bug_reports) - negative_total)
+        acc_dict[i + 1] = round(acc, 3)
+
+    return acc_dict
+
+
 def train_dnn(
     i,
     num_folds,
@@ -88,49 +131,21 @@ def train_dnn(
     )
     clf.fit(X_train, y_train.ravel())
 
-    # predicted = clf.predict(X_test)
-
-    topk_counters = [0] * 20
-    negative_total = 0
-    for bug_report in bug_reports:
-        dnn_input = []
-        corresponding_files = []
-        bug_id = bug_report["id"]
-
-        try:
-            for temp_dict in sample_dict[bug_id]:
-                key = list(temp_dict.keys())[0]
-                value = list(temp_dict.values())[0]
-                dnn_input.append(value)
-                corresponding_files.append(key)
-        except:
-            negative_total += 1
-            continue
-
-        relevancy_list = clf.predict(dnn_input)
-
-        for i in range(1, 21):
-            max_indices = np.argpartition(relevancy_list, -i)[-i:]
-            for corresponding_file in np.array(corresponding_files)[max_indices]:
-                if str(corresponding_file) in bug_reports_files_dict[bug_id]:
-                    topk_counters[i - 1] += 1
-                    break
-
-    acc_dict = {}
-    for i, counter in enumerate(topk_counters):
-        acc = counter / (len(bug_reports) - negative_total)
-        acc_dict[i + 1] = acc
+    acc_dict = topk_accuarcy(bug_reports, sample_dict, bug_reports_files_dict, clf=clf)
 
     return acc_dict
 
 
 def dnn_model_kfold(k=10):
-    samples_ = csv2dict("../data/features.csv")
+    samples = csv2dict("../data/features.csv")
 
-    sample_dict, bug_reports, bug_reports_files_dict = some_collections(samples_)
+    # These collections are speed up the process while calculating top-k accuracy
+    sample_dict, bug_reports, bug_reports_files_dict = helper_collections(samples)
 
-    samples = oversample(samples_)
+    # Oversample and shuffle samples
+    samples = oversample(samples)
     np.random.shuffle(samples)
+
     features, labels = features_and_labels(samples)
 
     # K-fold Cross Validation
@@ -156,3 +171,6 @@ def dnn_model_kfold(k=10):
         avg_acc_dict[key] = round(sum([d[key] for d in acc_dicts]) / len(acc_dicts), 3)
 
     return avg_acc_dict
+
+
+print(dnn_model_kfold())
