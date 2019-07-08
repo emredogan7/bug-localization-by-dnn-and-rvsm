@@ -1,7 +1,7 @@
-from util import csv2dict, tsv2dict
+from util import csv2dict, tsv2dict, helper_collections, topk_accuarcy
 from sklearn.neural_network import MLPRegressor
-from sklearn.model_selection import train_test_split, KFold
 from joblib import Parallel, delayed, cpu_count
+from math import ceil
 import numpy as np
 import os
 
@@ -34,92 +34,32 @@ def features_and_labels(samples):
     return features, labels
 
 
-def helper_collections(samples_, only_rvsm=False):
-    sample_dict = {}
-    for sample in samples_:
-        sample_dict[sample["report_id"]] = []
+def kfold_split_indexes(k, len_samples):
+    step = ceil(len_samples / k)
+    ret_list = [(start, step) for start in range(0, len_samples, step)]
 
-    for sample in samples_:
-        temp_dict = {}
-
-        values = [float(sample["rVSM_similarity"])]
-        if not only_rvsm:
-            values += [
-                float(sample["collab_filter"]),
-                float(sample["classname_similarity"]),
-                float(sample["bug_recency"]),
-                float(sample["bug_frequency"]),
-            ]
-        temp_dict[os.path.normpath(sample["file"])] = values
-
-        sample_dict[sample["report_id"]].append(temp_dict)
-
-    bug_reports = tsv2dict("../data/Eclipse_Platform_UI.txt")
-    bug_reports_files_dict = {}
-
-    for bug_report in bug_reports:
-        bug_reports_files_dict[bug_report["id"]] = bug_report["files"]
-
-    return sample_dict, bug_reports, bug_reports_files_dict
+    return ret_list
 
 
-def topk_accuarcy(bug_reports, sample_dict, bug_reports_files_dict, clf=None):
+def kfold_split(bug_reports, samples, start, step):
+    train_samples = samples[:start] + samples[start + step :]
+    test_samples = samples[start : start + step]
 
-    topk_counters = [0] * 20
-    negative_total = 0
-    for bug_report in bug_reports:
-        dnn_input = []
-        corresponding_files = []
-        bug_id = bug_report["id"]
+    test_br_ids = set([s["report_id"] for s in test_samples])
+    test_bug_reports = [br for br in bug_reports if br["id"] in test_br_ids]
 
-        try:
-            for temp_dict in sample_dict[bug_id]:
-                key = list(temp_dict.keys())[0]
-                value = list(temp_dict.values())[0]
-                dnn_input.append(value)
-                corresponding_files.append(key)
-        except:
-            negative_total += 1
-            continue
-
-        # Calculate relevancy for all files related to the bug report in features.csv
-        # Remeber that there are 50 wrong(randomly chosen) files for each right(buggy) in features.csv
-        relevancy_list = []
-        if clf:  # dnn classifier
-            relevancy_list = clf.predict(dnn_input)
-        else:  # rvsm
-            relevancy_list = np.array(dnn_input).ravel()
-
-        # Top-1, top-2 ... top-20 accuracy
-        for i in range(1, 21):
-            max_indices = np.argpartition(relevancy_list, -i)[-i:]
-            for corresponding_file in np.array(corresponding_files)[max_indices]:
-                if str(corresponding_file) in bug_reports_files_dict[bug_id]:
-                    topk_counters[i - 1] += 1
-                    break
-
-    acc_dict = {}
-    for i, counter in enumerate(topk_counters):
-        acc = counter / (len(bug_reports) - negative_total)
-        acc_dict[i + 1] = round(acc, 3)
-
-    return acc_dict
+    return train_samples, test_bug_reports
 
 
 def train_dnn(
-    i,
-    num_folds,
-    features,
-    labels,
-    train_index,
-    test_index,
-    sample_dict,
-    bug_reports,
-    bug_reports_files_dict,
+    i, num_folds, samples, start, step, sample_dict, bug_reports, br2files_dict
 ):
-    print("Experiment: {} / {}".format(i + 1, num_folds), end="\r")
-    X_train, y_train = features[train_index], labels[train_index]
-    # X_test, y_test = features_train[test_index], labels_train[test_index]
+    print("Fold: {} / {}".format(i + 1, num_folds), end="\r")
+
+    train_samples, test_bug_reports = kfold_split(bug_reports, samples, start, step)
+    train_samples = oversample(train_samples)
+    np.random.shuffle(train_samples)
+    X_train, y_train = features_and_labels(train_samples)
 
     clf = MLPRegressor(
         solver="sgd",
@@ -131,7 +71,7 @@ def train_dnn(
     )
     clf.fit(X_train, y_train.ravel())
 
-    acc_dict = topk_accuarcy(bug_reports, sample_dict, bug_reports_files_dict, clf=clf)
+    acc_dict = topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=clf)
 
     return acc_dict
 
@@ -140,37 +80,21 @@ def dnn_model_kfold(k=10):
     samples = csv2dict("../data/features.csv")
 
     # These collections are speed up the process while calculating top-k accuracy
-    sample_dict, bug_reports, bug_reports_files_dict = helper_collections(samples)
+    sample_dict, bug_reports, br2files_dict = helper_collections(samples)
 
-    # Oversample and shuffle samples
-    samples = oversample(samples)
     np.random.shuffle(samples)
 
-    features, labels = features_and_labels(samples)
-
-    # K-fold Cross Validation
-    kf = KFold(n_splits=k)
-
-    acc_dicts = Parallel(n_jobs=cpu_count() - 1)(
+    # K-fold Cross Validation in parallel 
+    acc_dicts = Parallel(n_jobs=-2)( # Uses all cores but one
         delayed(train_dnn)(
-            i,
-            k,
-            features,
-            labels,
-            train_index,
-            test_index,
-            sample_dict,
-            bug_reports,
-            bug_reports_files_dict,
+            i, k, samples, start, step, sample_dict, bug_reports, br2files_dict
         )
-        for i, (train_index, test_index) in enumerate(kf.split(features))
+        for i, (start, step) in enumerate(kfold_split_indexes(k, len(samples)))
     )
 
+    # Calculating the average accuracy from all folds
     avg_acc_dict = {}
     for key in acc_dicts[0].keys():
         avg_acc_dict[key] = round(sum([d[key] for d in acc_dicts]) / len(acc_dicts), 3)
 
     return avg_acc_dict
-
-
-print(dnn_model_kfold())

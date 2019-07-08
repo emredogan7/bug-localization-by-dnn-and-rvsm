@@ -10,11 +10,12 @@ import re
 import os
 import random
 import timeit
+import string
+import numpy as np
 from datetime import datetime
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
-import string
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
@@ -276,6 +277,79 @@ def class_name_similarity(raw_text, source_code):
     class_name_sim = cosine_sim(raw_text, class_names_text)
 
     return class_name_sim
+
+
+
+def helper_collections(samples, only_rvsm=False):
+    sample_dict = {}
+    for s in samples:
+        sample_dict[s["report_id"]] = []
+
+    for s in samples:
+        temp_dict = {}
+
+        values = [float(s["rVSM_similarity"])]
+        if not only_rvsm:
+            values += [
+                float(s["collab_filter"]),
+                float(s["classname_similarity"]),
+                float(s["bug_recency"]),
+                float(s["bug_frequency"]),
+            ]
+        temp_dict[os.path.normpath(s["file"])] = values
+
+        sample_dict[s["report_id"]].append(temp_dict)
+
+    bug_reports = tsv2dict("../data/Eclipse_Platform_UI.txt")
+    br2files_dict = {}
+
+    for bug_report in bug_reports:
+        br2files_dict[bug_report["id"]] = bug_report["files"]
+
+    return sample_dict, bug_reports, br2files_dict
+
+
+def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
+    topk_counters = [0] * 20
+    negative_total = 0
+    for bug_report in test_bug_reports:
+        dnn_input = []
+        corresponding_files = []
+        bug_id = bug_report["id"]
+
+        try:
+            for temp_dict in sample_dict[bug_id]:
+                java_file = list(temp_dict.keys())[0]
+                features_for_java_file = list(temp_dict.values())[0]
+                dnn_input.append(features_for_java_file)
+                corresponding_files.append(java_file)
+        except:
+            negative_total += 1
+            continue
+
+        # Calculate relevancy for all files related to the bug report in features.csv
+        # Remember that, in features.csv, there are 50 wrong(randomly chosen) files for each right(buggy)
+        relevancy_list = []
+        if clf:  # dnn classifier
+            relevancy_list = clf.predict(dnn_input)
+        else:  # rvsm
+            relevancy_list = np.array(dnn_input).ravel()
+
+        # Top-1, top-2 ... top-20 accuracy
+        for i in range(1, 21):
+            max_indices = np.argpartition(relevancy_list, -i)[-i:]
+            for corresponding_file in np.array(corresponding_files)[max_indices]:
+                if str(corresponding_file) in br2files_dict[bug_id]:
+                    topk_counters[i - 1] += 1
+                    break
+
+    acc_dict = {}
+    for i, counter in enumerate(topk_counters):
+        acc = counter / (len(test_bug_reports) - negative_total)
+        acc_dict[i + 1] = round(acc, 3)
+
+    return acc_dict
+
 
 
 class CodeTimer:
